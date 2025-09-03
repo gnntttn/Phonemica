@@ -1,0 +1,7 @@
+{
+  "name": "Phonemica",
+  "description": "Your personal AI tutor for mastering pronunciation and conversational fluency in a new language.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
