@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Language, ChatMessage, Sender, FluencyFeedback, PronunciationTip } from '../types';
-import { createTutorChat, getFluencyFeedback, getConversationSummary, getPronunciationTips, generateSceneImage, getMistakeExplanation } from '../services/geminiService';
+import { generateChatResponse, startScenarioChat, getFluencyFeedback, getConversationSummary, getPronunciationTips, generateSceneImage, getMistakeExplanation } from '../services/geminiService';
 import { SCENARIOS } from '../constants';
-import { Chat } from '@google/genai';
 import CallControls from './ChatInput';
 import { BackIcon, AnalyticsIcon, SettingsIcon, LightbulbIcon, SoundWaveIcon, QuestionMarkCircleIcon } from './icons';
 
@@ -241,7 +240,6 @@ const ChatView: React.FC<ChatViewProps> = ({ language, onBack, onNewWord, initia
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
 
-  const chatSessionRef = useRef<Chat | null>(null);
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const userMessages = messages.filter(m => m.sender === Sender.User);
@@ -290,7 +288,6 @@ const ChatView: React.FC<ChatViewProps> = ({ language, onBack, onNewWord, initia
 
     if (selectedScenario) {
         setIsImageLoading(true);
-        // Generate image in parallel without blocking UI
         generateSceneImage(selectedScenario, language).then(url => {
             setSceneImageUrl(url);
             setIsImageLoading(false);
@@ -298,10 +295,8 @@ const ChatView: React.FC<ChatViewProps> = ({ language, onBack, onNewWord, initia
     }
 
     try {
-      chatSessionRef.current = createTutorChat(language, selectedScenario);
-
       if (selectedScenario) {
-        const response = await chatSessionRef.current.sendMessage({ message: "(Start the conversation now based on the scenario)" });
+        const response = await startScenarioChat(language, selectedScenario);
         const aiMessage: ChatMessage = { id: 'init-scenario', sender: Sender.AI, text: response.text };
         setMessages([aiMessage]);
         speak(response.text);
@@ -314,7 +309,7 @@ const ChatView: React.FC<ChatViewProps> = ({ language, onBack, onNewWord, initia
       }
     } catch (error) {
       console.error("Failed to initialize chat:", error);
-      setMessages([{ id: 'error', sender: Sender.System, text: 'Error: Could not initialize AI tutor. Please check your API key and refresh.' }]);
+      setMessages([{ id: 'error', sender: Sender.System, text: 'Error: Could not contact AI tutor. Please check your connection and try again.' }]);
     } finally {
       setIsLoading(false);
     }
@@ -343,18 +338,18 @@ const ChatView: React.FC<ChatViewProps> = ({ language, onBack, onNewWord, initia
 
   useEffect(() => {
     initializeChat(scenario);
-  }, [initializeChat]);
+  }, [initializeChat, scenario]);
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
     const userMessage: ChatMessage = { id: Date.now().toString(), sender: Sender.User, text };
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setIsLoading(true);
 
     try {
-      if (!chatSessionRef.current) throw new Error("Chat session not initialized.");
-      const response = await chatSessionRef.current.sendMessage({ message: text });
+      const response = await generateChatResponse(newMessages, language, scenario);
       
       let aiText = response.text;
       const vocabRegex = /\[VOCAB\](.*?)\[\/VOCAB\]/s;
@@ -399,6 +394,8 @@ const ChatView: React.FC<ChatViewProps> = ({ language, onBack, onNewWord, initia
         setExplanation(result);
     } catch (e) {
         setExplanation("Sorry, I couldn't get an explanation at this time.");
+    } finally {
+        setIsExplaining(false);
     }
   };
 

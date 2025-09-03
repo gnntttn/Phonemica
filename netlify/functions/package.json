@@ -1,0 +1,10 @@
+{
+  "name": "phonemica-functions",
+  "version": "1.0.0",
+  "description": "Netlify functions for Phonemica app",
+  "main": "gemini-proxy.mjs",
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^1.16.0"
+  }
+}
